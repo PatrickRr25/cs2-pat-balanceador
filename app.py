@@ -6,36 +6,17 @@ st.title("Balanceador de Equipos CS2 - 5v5")
 
 # Componente por jugador con UX mejorado
 def autocompletar_jugador(label, key_prefix):
-    # Mostrar solo el resultado final si ya fue seleccionado
-    if st.session_state.get(f"{key_prefix}_final"):
-        seleccionado = st.session_state[f"{key_prefix}_final"]
-        st.success(f"✅ {label} seleccionado: `{seleccionado}`")
-        nick = seleccionado.split(" (")[0]
-        sid = seleccionado.split("(")[-1].replace(")", "")
-        return nick, sid
-
-    # Paso 1: Buscar texto
-    search_text = st.text_input(
-        f"{label} - Buscar nickname",
-        placeholder="Escribe parte del nickname y presiona ENTER",
-        key=f"{key_prefix}_text"
-    )
+    search_text = st.text_input(f"{label} - Buscar nickname", key=f"{key_prefix}_text")
 
     resultados = buscar_nicks(search_text) if search_text else []
     opciones = [f"{nick} ({sid})" for sid, nick in resultados] if resultados else []
 
-    # Paso 2: Seleccionar nickname (si hay opciones)
-    seleccionado = st.selectbox(
-        f"{label} - Selecciona jugador",
-        opciones,
-        key=f"{key_prefix}_select"
-    ) if opciones else None
+    seleccionado = st.selectbox(f"{label} - Seleccionar jugador", opciones, key=f"{key_prefix}_select") if opciones else None
 
-    # Guardar selección
     if seleccionado:
-        st.session_state[f"{key_prefix}_final"] = seleccionado
-        st.rerun()
-
+        sid = seleccionado.split("(")[-1].replace(")", "")
+        nick = seleccionado.split("(")[0].strip()
+        return nick, sid
     return None, None
 
 # Función para construir 5 inputs por equipo
