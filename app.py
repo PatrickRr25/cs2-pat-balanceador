@@ -60,6 +60,7 @@ def seleccionar_jugadores(prefix, jugadores_ocupados):
                     st.write({
                         "Rank": stats["rank"],
                         "Skill": stats["skill"],
+                        "HLTV Rating": stats["hltv_rating"],
                         "K/D": stats["kd"],
                         "HS%": stats["hs"],
                         "Winrate": stats["winrate"],
