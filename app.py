@@ -1,65 +1,63 @@
 import streamlit as st
-import pandas as pd
-import sqlite3
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from db import buscar_nicks
 
 st.set_page_config(page_title="CS2 Balanceador", layout="wide")
 st.title("Balanceador de Equipos CS2 - 5v5")
 
-DB_PATH = "steam_friends_cs2.db"
-
-# Cargar todos los jugadores de la base de datos
-@st.cache_data
-def cargar_jugadores():
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT steam_id, nickname FROM friends", conn)
-    conn.close()
-    return df
-
-df_jugadores = cargar_jugadores()
-
-# Configuración para cada tabla (AgGrid)
-def mostrar_selector_equipo(titulo, key):
-    st.subheader(titulo)
-
-    gb = GridOptionsBuilder.from_dataframe(df_jugadores)
-    gb.configure_pagination(paginationAutoPageSize=True)
-    gb.configure_selection(selection_mode="multiple", use_checkbox=True)
-    gb.configure_grid_options(domLayout='normal')
-    gb.configure_default_column(filter=True, sortable=True, resizable=True)
-
-    grid_options = gb.build()
-
-    grid_response = AgGrid(
-        df_jugadores,
-        gridOptions=grid_options,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        height=300,
-        key=key
+# Componente por jugador con UX mejorado
+def autocompletar_jugador(label, key_prefix):
+    search_text = st.text_input(
+        f"{label} - Buscar nickname",
+        placeholder="Escribe parte del nickname y presiona ENTER",
+        key=f"{key_prefix}_text"
     )
 
-    seleccionados = grid_response["selected_rows"]
-    return seleccionados
+    resultados = buscar_nicks(search_text) if search_text else []
+    if search_text and not resultados:
+        st.info("❌ No se encontraron coincidencias.")
 
-# Dos columnas para los equipos
+    opciones = [f"{nick} ({sid})" for sid, nick in resultados] if resultados else []
+
+    seleccionado = st.selectbox(
+        f"{label} - Selecciona jugador",
+        opciones,
+        key=f"{key_prefix}_select"
+    ) if opciones else None
+
+    if seleccionado:
+        sid = seleccionado.split("(")[-1].replace(")", "")
+        nick = seleccionado.split("(")[0].strip()
+        return nick, sid
+
+    return None, None
+
+# Función para construir 5 inputs por equipo
+def seleccionar_jugadores(prefix):
+    equipo = {}
+    for i in range(5):
+        nick, sid = autocompletar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}")
+        if nick and sid:
+            equipo[nick] = sid
+    return equipo
+
+# Crear columnas para equipos
 col1, col2 = st.columns(2)
 
 with col1:
-    seleccionados_a = mostrar_selector_equipo("🔵 Equipo A", key="equipo_a")
+    st.subheader("🔵 Equipo A")
+    equipo_a = seleccionar_jugadores("A")
 
 with col2:
-    seleccionados_b = mostrar_selector_equipo("🔴 Equipo B", key="equipo_b")
+    st.subheader("🔴 Equipo B")
+    equipo_b = seleccionar_jugadores("B")
 
 st.divider()
 
 if st.button("Confirmar equipos"):
-    if len(seleccionados_a) == 5 and len(seleccionados_b) == 5:
-        equipo_a = {jugador["nickname"]: jugador["steam_id"] for jugador in seleccionados_a}
-        equipo_b = {jugador["nickname"]: jugador["steam_id"] for jugador in seleccionados_b}
-
+    if len(equipo_a) == 5 and len(equipo_b) == 5:
         st.success("✅ Equipos seleccionados correctamente")
         st.write("🔵 Equipo A:", equipo_a)
         st.write("🔴 Equipo B:", equipo_b)
-        # Aquí vendrá el scraping + cálculo + balance
+        # Aquí: scraping + cálculo de habilidades + balanceo
     else:
-        st.warning("⚠️ Debes seleccionar 5 jugadores en cada equipo.")
+        st.warning("⚠️ Debes seleccionar 5 jugadores por equipo.")
