@@ -4,4 +4,4 @@ streamlit-aggrid
 selenium
 beautifulsoup4
 webdriver-manager
-sync_playwright
+playwright
