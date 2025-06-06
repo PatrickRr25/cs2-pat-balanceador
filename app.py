@@ -1,51 +1,76 @@
 import streamlit as st
-from db import buscar_nicks
+import sqlite3
 from scraper import obtener_stats
 
+# Configuración de página
 st.set_page_config(page_title="CS2 Balanceador", layout="wide")
 st.title("Balanceador de Equipos CS2 - 5v5")
 
-# --- Obtener todos los jugadores desde la BD
-todos_jugadores = buscar_nicks("")
+# --- Cargar jugadores desde base de datos
+@st.cache_data
+def cargar_jugadores():
+    conn = sqlite3.connect("steam_friends_cs2.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT steam_id, nickname FROM friends")
+    jugadores = cursor.fetchall()
+    conn.close()
+    return jugadores
 
 # Agregar manualmente a Patrick si no está
-tu_nick = "P4T"
+jugadores = cargar_jugadores()
 tu_steam_id = "76561198108579338"
+tu_nick = "PatrickRr25"
+if not any(sid == tu_steam_id for sid, _ in jugadores):
+    jugadores.append((tu_steam_id, tu_nick))
 
-if not any(sid == tu_steam_id for sid, _ in todos_jugadores):
-    todos_jugadores.append((tu_steam_id, tu_nick))
-
-# --- Componente para seleccionar un jugador, evitando duplicados
-def seleccionar_jugador(label, key_prefix, opciones_filtradas):
+# --- Función para seleccionar un jugador + scrapear sus stats
+def seleccionar_jugador(label, key_prefix, disponibles):
     seleccionado = st.selectbox(
-        f"{label} - Seleccionar jugador",
-        [""] + sorted(opciones_filtradas),
+        f"{label} - Selecciona jugador",
+        [""] + sorted(disponibles),
         key=f"{key_prefix}_select"
     )
 
     if seleccionado:
-        # Obtener Steam ID correspondiente
-        for sid, nick in todos_jugadores:
-            if nick == seleccionado:
-                return nick, sid
+        sid = next(sid for sid, nick in jugadores if nick == seleccionado)
+        st.session_state[f"{key_prefix}_nick"] = seleccionado
+        st.session_state[f"{key_prefix}_sid"] = sid
+
+        # Scraping automático si aún no existe
+        if f"{key_prefix}_stats" not in st.session_state:
+            st.session_state[f"{key_prefix}_stats"] = obtener_stats(sid)
+
+        return seleccionado, sid
     return None, None
 
-# --- Función que construye 5 selects únicos por equipo
+# --- Selección de equipo
 def seleccionar_jugadores(prefix, jugadores_ocupados):
     equipo = {}
     for i in range(5):
-        # Filtrar jugadores no seleccionados aún
-        disponibles = [nick for sid, nick in todos_jugadores if sid not in jugadores_ocupados]
+        disponibles = [nick for sid, nick in jugadores if sid not in jugadores_ocupados]
         nick, sid = seleccionar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}", disponibles)
         if nick and sid:
             equipo[nick] = sid
             jugadores_ocupados.add(sid)
+
+            # Mostrar stats en tiempo real
+            stats = st.session_state.get(f"{prefix}_{i}_stats")
+            if stats:
+                with st.expander(f"📊 Stats de {nick}"):
+                    st.write({
+                        "Rank": stats["rank"],
+                        "Skill": stats["skill"],
+                        "K/D": stats["kd"],
+                        "HS%": stats["hs"],
+                        "Winrate": stats["winrate"],
+                        "ADR": stats["adr"]
+                    })
     return equipo
 
-# --- Compartir lista de jugadores ya usados
+# --- Control de duplicados
 jugadores_ocupados = set()
 
-# --- Layout de columnas para los equipos
+# --- Interfaz de columnas para equipos
 col1, col2 = st.columns(2)
 
 with col1:
@@ -56,49 +81,14 @@ with col2:
     st.subheader("🔴 Equipo B")
     equipo_b = seleccionar_jugadores("B", jugadores_ocupados)
 
-# Confirmación y muestra de stats
+# --- Confirmación final
 st.divider()
 
 if st.button("Confirmar equipos"):
     if len(equipo_a) == 5 and len(equipo_b) == 5:
         st.success("✅ Equipos seleccionados correctamente")
-
-        # Mostrar equipos seleccionados
         st.write("🔵 Equipo A:", equipo_a)
         st.write("🔴 Equipo B:", equipo_b)
-
-        # Mostrar stats en columnas
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("📊 Stats - Equipo A")
-            for nick, sid in equipo_a.items():
-                stats = obtener_stats(sid)
-                st.markdown(f"**{nick}**")
-                st.write({
-                    "Rank": stats["rank"],
-                    "Skill": stats["skill"],
-                    "K/D": stats["kd"],
-                    "HS%": stats["hs"],
-                    "Winrate": stats["winrate"],
-                    "ADR": stats["adr"]
-                })
-                st.markdown("---")
-
-        with col2:
-            st.subheader("📊 Stats - Equipo B")
-            for nick, sid in equipo_b.items():
-                stats = obtener_stats(sid)
-                st.markdown(f"**{nick}**")
-                st.write({
-                    "Rank": stats["rank"],
-                    "Skill": stats["skill"],
-                    "K/D": stats["kd"],
-                    "HS%": stats["hs"],
-                    "Winrate": stats["winrate"],
-                    "ADR": stats["adr"]
-                })
-                st.markdown("---")
-
+        # Aquí se puede aplicar cálculo de habilidad y balance
     else:
         st.warning("⚠️ Debes seleccionar 5 jugadores por equipo.")
