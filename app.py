@@ -4,14 +4,15 @@ from db import buscar_nicks
 st.set_page_config(page_title="CS2 Balanceador", layout="wide")
 st.title("Balanceador de Equipos CS2 - 5v5")
 
-# Componente por jugador con UX mejorado
-def autocompletar_jugador(label, key_prefix):
-    search_text = st.text_input(f"{label} - Buscar nickname", key=f"{key_prefix}_text")
+# Obtener todos los jugadores una sola vez (búsqueda vacía devuelve todos)
+todos_jugadores = buscar_nicks("")
 
-    resultados = buscar_nicks(search_text) if search_text else []
-    opciones = [f"{nick} ({sid})" for sid, nick in resultados] if resultados else []
+# Preparar opciones formateadas
+opciones_jugadores = [f"{nick} ({sid})" for sid, nick in todos_jugadores]
 
-    seleccionado = st.selectbox(f"{label} - Seleccionar jugador", opciones, key=f"{key_prefix}_select") if opciones else None
+# Componente por jugador con selectbox estático
+def seleccionar_jugador(label, key_prefix):
+    seleccionado = st.selectbox(f"{label} - Seleccionar jugador", opciones_jugadores, key=f"{key_prefix}_select")
 
     if seleccionado:
         sid = seleccionado.split("(")[-1].replace(")", "")
@@ -23,7 +24,7 @@ def autocompletar_jugador(label, key_prefix):
 def seleccionar_jugadores(prefix):
     equipo = {}
     for i in range(5):
-        nick, sid = autocompletar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}")
+        nick, sid = seleccionar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}")
         if nick and sid:
             equipo[nick] = sid
     return equipo
