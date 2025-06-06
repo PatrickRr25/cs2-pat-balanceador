@@ -1,6 +1,6 @@
 import streamlit as st
 import sqlite3
-from bd import buscar_nicks
+from db import buscar_nicks
 
 # Título de la aplicación
 st.title("Balanceador CS2 - Equipos 5v5")
