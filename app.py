@@ -1,34 +1,55 @@
 import streamlit as st
-from db import buscar_nicks
+import sqlite3
 
+# Configuración de página
 st.set_page_config(page_title="CS2 Balanceador", layout="wide")
 st.title("Balanceador de Equipos CS2 - 5v5")
 
-# Componente por jugador con UX mejorado
-def autocompletar_jugador(label, key_prefix):
-    search_text = st.text_input(f"{label} - Buscar nickname", key=f"{key_prefix}_text")
+# Cargar todos los jugadores de la base de datos
+@st.cache_data
+def cargar_jugadores():
+    conn = sqlite3.connect("steam_friends_cs2.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT steam_id, nickname FROM friends")
+    resultados = cursor.fetchall()
+    conn.close()
+    return resultados
 
-    resultados = buscar_nicks(search_text) if search_text else []
-    opciones = [f"{nick} ({sid})" for sid, nick in resultados] if resultados else []
+todos_los_jugadores = cargar_jugadores()
 
-    seleccionado = st.selectbox(f"{label} - Seleccionar jugador", opciones, key=f"{key_prefix}_select") if opciones else None
+# Componente por jugador
+def autocompletar_jugador(label, key_prefix, jugadores):
+    if st.session_state.get(f"{key_prefix}_final"):
+        seleccionado = st.session_state[f"{key_prefix}_final"]
+        st.success(f"✅ {label} seleccionado: `{seleccionado}`")
+        nick = seleccionado.split(" (")[0]
+        sid = seleccionado.split("(")[-1].replace(")", "")
+        return nick, sid
+
+    opciones = [f"{nick} ({sid})" for sid, nick in jugadores]
+
+    seleccionado = st.selectbox(
+        f"{label} - Escribe y selecciona jugador",
+        opciones,
+        key=f"{key_prefix}_select"
+    )
 
     if seleccionado:
-        sid = seleccionado.split("(")[-1].replace(")", "")
-        nick = seleccionado.split("(")[0].strip()
-        return nick, sid
+        st.session_state[f"{key_prefix}_final"] = seleccionado
+        st.rerun()
+
     return None, None
 
-# Función para construir 5 inputs por equipo
+# Selector de jugadores para cada equipo
 def seleccionar_jugadores(prefix):
     equipo = {}
     for i in range(5):
-        nick, sid = autocompletar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}")
+        nick, sid = autocompletar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}", todos_los_jugadores)
         if nick and sid:
             equipo[nick] = sid
     return equipo
 
-# Crear columnas para equipos
+# Dos columnas para equipos
 col1, col2 = st.columns(2)
 
 with col1:
@@ -39,6 +60,7 @@ with col2:
     st.subheader("🔴 Equipo B")
     equipo_b = seleccionar_jugadores("B")
 
+# Confirmación
 st.divider()
 
 if st.button("Confirmar equipos"):
@@ -46,6 +68,6 @@ if st.button("Confirmar equipos"):
         st.success("✅ Equipos seleccionados correctamente")
         st.write("🔵 Equipo A:", equipo_a)
         st.write("🔴 Equipo B:", equipo_b)
-        # Aquí: scraping + cálculo de habilidades + balanceo
+        # Aquí irá el scraping + skill score + balanceo
     else:
-        st.warning("⚠️ Debes seleccionar 5 jugadores por equipo.")
+        st.warning("⚠️ Debes seleccionar 5 jugadores en cada equipo.")
