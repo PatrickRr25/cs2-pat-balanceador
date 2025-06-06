@@ -19,7 +19,7 @@ def cargar_jugadores():
 # Agregar manualmente a Patrick si no está
 jugadores = cargar_jugadores()
 tu_steam_id = "76561198108579338"
-tu_nick = "PatrickRr25"
+tu_nick = "Pat"
 if not any(sid == tu_steam_id for sid, _ in jugadores):
     jugadores.append((tu_steam_id, tu_nick))
 
