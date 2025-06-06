@@ -1,3 +1,4 @@
+
 import streamlit as st
 from db import buscar_nicks
 
@@ -7,17 +8,25 @@ st.title("Balanceador de Equipos CS2 - 5v5")
 # Obtener todos los jugadores una sola vez (búsqueda vacía devuelve todos)
 todos_jugadores = buscar_nicks("")
 
-# Preparar opciones formateadas
-opciones_jugadores = [f"{nick} ({sid})" for sid, nick in todos_jugadores]
+# Extraer solo los nombres de usuario
+opciones_jugadores = sorted(list({nick for _, nick in todos_jugadores}))  # eliminar duplicados y ordenar
+opciones_jugadores.insert(0, "")  # Placeholder vacío
 
 # Componente por jugador con selectbox estático
 def seleccionar_jugador(label, key_prefix):
-    seleccionado = st.selectbox(f"{label} - Seleccionar jugador", opciones_jugadores, key=f"{key_prefix}_select")
+    seleccionado = st.selectbox(
+        f"{label} - Seleccionar jugador",
+        opciones_jugadores,
+        key=f"{key_prefix}_select",
+        index=0,
+        placeholder="Selecciona un jugador..."
+    )
 
     if seleccionado:
-        sid = seleccionado.split("(")[-1].replace(")", "")
-        nick = seleccionado.split("(")[0].strip()
-        return nick, sid
+        # Obtener Steam ID desde la lista original
+        for sid, nick in todos_jugadores:
+            if nick == seleccionado:
+                return nick, sid
     return None, None
 
 # Función para construir 5 inputs por equipo
