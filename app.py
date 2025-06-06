@@ -6,39 +6,35 @@ st.title("Balanceador de Equipos CS2 - 5v5")
 
 # Componente por jugador con UX mejorado
 def autocompletar_jugador(label, key_prefix):
-    # Ya seleccionado
-    if st.session_state.get(f"{key_prefix}_seleccionado", False):
-        seleccionado = st.session_state.get(f"{key_prefix}_final")
+    # Mostrar solo el resultado final si ya fue seleccionado
+    if st.session_state.get(f"{key_prefix}_final"):
+        seleccionado = st.session_state[f"{key_prefix}_final"]
         st.success(f"✅ {label} seleccionado: `{seleccionado}`")
-        sid = seleccionado.split("(")[-1].replace(")", "")
         nick = seleccionado.split(" (")[0]
+        sid = seleccionado.split("(")[-1].replace(")", "")
         return nick, sid
 
-    # Entrada de texto
+    # Paso 1: Buscar texto
     search_text = st.text_input(
         f"{label} - Buscar nickname",
-        placeholder="Nickname",
+        placeholder="Escribe parte del nickname y presiona ENTER",
         key=f"{key_prefix}_text"
     )
 
-    # Mostrar botón para buscar
-    buscar = st.button("🔍 Buscar", key=f"{key_prefix}_buscar")
+    resultados = buscar_nicks(search_text) if search_text else []
+    opciones = [f"{nick} ({sid})" for sid, nick in resultados] if resultados else []
 
-    if buscar:
-        resultados = buscar_nicks(search_text)
-        if not resultados:
-            st.info("❌ No se encontraron coincidencias.")
-        else:
-            opciones = [f"{nick} ({sid})" for sid, nick in resultados]
-            seleccionado = st.selectbox(
-                f"{label} - Selecciona jugador",
-                opciones,
-                key=f"{key_prefix}_select"
-            )
-            if seleccionado:
-                st.session_state[f"{key_prefix}_seleccionado"] = True
-                st.session_state[f"{key_prefix}_final"] = seleccionado
-                st.rerun()
+    # Paso 2: Seleccionar nickname (si hay opciones)
+    seleccionado = st.selectbox(
+        f"{label} - Selecciona jugador",
+        opciones,
+        key=f"{key_prefix}_select"
+    ) if opciones else None
+
+    # Guardar selección
+    if seleccionado:
+        st.session_state[f"{key_prefix}_final"] = seleccionado
+        st.rerun()
 
     return None, None
 
