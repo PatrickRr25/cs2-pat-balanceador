@@ -1,5 +1,6 @@
 import streamlit as st
 from db import buscar_nicks
+from scraper import obtener_stats
 
 st.set_page_config(page_title="CS2 Balanceador", layout="wide")
 st.title("Balanceador de Equipos CS2 - 5v5")
@@ -55,14 +56,49 @@ with col2:
     st.subheader("🔴 Equipo B")
     equipo_b = seleccionar_jugadores("B", jugadores_ocupados)
 
-# --- Confirmar equipos
+# Confirmación y muestra de stats
 st.divider()
 
 if st.button("Confirmar equipos"):
     if len(equipo_a) == 5 and len(equipo_b) == 5:
         st.success("✅ Equipos seleccionados correctamente")
+
+        # Mostrar equipos seleccionados
         st.write("🔵 Equipo A:", equipo_a)
         st.write("🔴 Equipo B:", equipo_b)
-        # Aquí: scraping + cálculo de habilidades + balanceo
+
+        # Mostrar stats en columnas
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("📊 Stats - Equipo A")
+            for nick, sid in equipo_a.items():
+                stats = obtener_stats(sid)
+                st.markdown(f"**{nick}**")
+                st.write({
+                    "Rank": stats["rank"],
+                    "Skill": stats["skill"],
+                    "K/D": stats["kd"],
+                    "HS%": stats["hs"],
+                    "Winrate": stats["winrate"],
+                    "ADR": stats["adr"]
+                })
+                st.markdown("---")
+
+        with col2:
+            st.subheader("📊 Stats - Equipo B")
+            for nick, sid in equipo_b.items():
+                stats = obtener_stats(sid)
+                st.markdown(f"**{nick}**")
+                st.write({
+                    "Rank": stats["rank"],
+                    "Skill": stats["skill"],
+                    "K/D": stats["kd"],
+                    "HS%": stats["hs"],
+                    "Winrate": stats["winrate"],
+                    "ADR": stats["adr"]
+                })
+                st.markdown("---")
+
     else:
         st.warning("⚠️ Debes seleccionar 5 jugadores por equipo.")
