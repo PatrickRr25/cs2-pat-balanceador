@@ -36,9 +36,9 @@ def seleccionar_jugador(label, key_prefix, disponibles):
         st.session_state[f"{key_prefix}_nick"] = seleccionado
         st.session_state[f"{key_prefix}_sid"] = sid
 
-        # Scraping automático si aún no existe
         if f"{key_prefix}_stats" not in st.session_state:
-            st.session_state[f"{key_prefix}_stats"] = obtener_stats(sid)
+            with st.spinner(f"Obteniendo estadísticas de {seleccionado}..."):
+                st.session_state[f"{key_prefix}_stats"] = obtener_stats(sid)
 
         return seleccionado, sid
     return None, None
@@ -59,12 +59,13 @@ def seleccionar_jugadores(prefix, jugadores_ocupados):
                 with st.expander(f"📊 Stats de {nick}"):
                     st.write({
                         "Rank": stats["rank"],
-                        "Skill": stats["skill"],
-                        "HLTV Rating": stats["hltv_rating"],
                         "K/D": stats["kd"],
-                        "HS%": stats["hs"],
+                        "HLTV Rating": stats["hltv_rating"],
+                        "Clutch Success": stats["clutch_success"],
                         "Winrate": stats["winrate"],
-                        "ADR": stats["adr"]
+                        "HS%": stats["hs"],
+                        "ADR": stats["adr"],
+                        "Entry Success": stats["entry_success"]
                     })
     return equipo
 

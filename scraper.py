@@ -1,48 +1,49 @@
-import requests
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 def obtener_stats(steam_id):
     url = f"https://csstats.gg/player/{steam_id}"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
     stats = {
         "steam_id": steam_id,
         "rank": None,
-        "skill": None,
-        "hltv_rating": None,
         "kd": None,
-        "hs": None,
+        "hltv_rating": None,
+        "clutch_success": None,
         "winrate": None,
-        "adr": None
+        "hs": None,
+        "adr": None,
+        "entry_success": None,
     }
 
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        res.raise_for_status()
-        soup = BeautifulSoup(res.text, "html.parser")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, timeout=30000)
 
-        def get_span_by_id(element_id):
-            div = soup.find("div", id=element_id)
-            if div and div.find("span"):
-                return div.find("span").text.strip()
-            return None
+        # Esperar a que cargue contenido
+        page.wait_for_selector("div#kpd")
 
-        # IDs directos del HTML
-        stats["hltv_rating"] = get_span_by_id("rating")         # HLTV Rating
-        stats["kd"] = get_span_by_id("kpd")                     # Kill/Death
-        stats["hs"] = get_span_by_id("hs")                      # Headshot %
-        stats["winrate"] = get_span_by_id("winrate")            # Win Rate %
-        stats["adr"] = get_span_by_id("adr")                    # ADR (Damage)
+        def safe_text(selector):
+            try:
+                return page.locator(selector).first.inner_text().strip()
+            except:
+                return None
 
-        # Rango y nivel de habilidad
-        skill_block = soup.find("div", class_="skill__value")
-        rank_block = soup.find("div", class_="skill__rank")
-        stats["skill"] = skill_block.text.strip() if skill_block else None
-        stats["rank"] = rank_block.text.strip() if rank_block else None
+        # Extraer datos
+        stats["rank"] = safe_text(".rank-block .rank-block__value")
+        stats["kd"] = safe_text("div#kpd span")
+        stats["hltv_rating"] = safe_text("div#rating span")
+        stats["clutch_success"] = safe_text("div#clutch span")
+        stats["winrate"] = safe_text("div#winrate span")
+        stats["hs"] = safe_text("div#hs span")
+        stats["adr"] = safe_text("div#adr span")
+        stats["entry_success"] = safe_text("div#entry span")  # Si hay selector identificable
 
-    except Exception as e:
-        print(f"❌ Error al obtener stats de {steam_id}: {e}")
-
+        browser.close()
     return stats
+
+# Solo para pruebas
+if __name__ == "__main__":
+    ejemplo_steam_id = "76561198108579338"
+    data = obtener_stats(ejemplo_steam_id)
+    for k, v in data.items():
+        print(f"{k}: {v}")
