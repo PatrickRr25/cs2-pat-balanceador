@@ -1,96 +1,74 @@
 import streamlit as st
-import sqlite3
-from scraper import obtener_stats
+import re
+import json
+from playwright.sync_api import sync_playwright
 
-# Configuración de página
-st.set_page_config(page_title="CS2 Balanceador", layout="wide")
-st.title("Balanceador de Equipos CS2 - 5v5")
+# -------------------------------
+# FUNCIONES
+# -------------------------------
 
-# --- Cargar jugadores desde base de datos
-@st.cache_data
-def cargar_jugadores():
-    conn = sqlite3.connect("steam_friends_cs2.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT steam_id, nickname FROM friends")
-    jugadores = cursor.fetchall()
-    conn.close()
-    return jugadores
+@st.cache_data(ttl=3600)  # Cachear por 1 hora
+def obtener_stats_desde_json(steam_id):
+    url = f"https://csstats.gg/player/{76561198108579338}"
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, timeout=30000)
+        page.wait_for_timeout(5000)
+        html = page.content()
+        match = re.search(r"var\s+stats\s*=\s*(\{.*?\});", html, re.DOTALL)
+        if not match:
+            browser.close()
+            return {}
+        json_str = match.group(1)
+        try:
+            stats = json.loads(json_str)
+        except:
+            browser.close()
+            return {}
+        browser.close()
+        return stats
 
-# Agregar manualmente a Patrick si no está
-jugadores = cargar_jugadores()
-tu_steam_id = "76561198108579338"
-tu_nick = "Pat"
-if not any(sid == tu_steam_id for sid, _ in jugadores):
-    jugadores.append((tu_steam_id, tu_nick))
+def calcular_metricas_avanzadas(stats):
+    resultado = {}
+    fk = stats.get("FK", 0)
+    fd = stats.get("FD", 0)
+    resultado["entry_success_rate"] = fk / (fk + fd) if (fk + fd) > 0 else None
+    resultado["entry_success_ct"] = stats.get("FK_CT_SPR")
+    resultado["entry_success_t"] = stats.get("FK_T_SPR")
+    resultado["assists"] = stats.get("A", 0)
+    utility_damage = 0
+    weapons = stats.get("weapons", {})
+    for arma in ["hegrenade", "molotov", "incgrenade"]:
+        dmg = weapons.get(arma, {}).get("dmg", 0)
+        utility_damage += dmg
+    resultado["utility_damage"] = utility_damage
+    return resultado
 
-# --- Función para seleccionar un jugador + scrapear sus stats
-def seleccionar_jugador(label, key_prefix, disponibles):
-    seleccionado = st.selectbox(
-        f"{label} - Selecciona jugador",
-        [""] + sorted(disponibles),
-        key=f"{key_prefix}_select"
-    )
+def filtrar_stats_completo(stats):
+    campos_directos = ["wr", "adr", "hs", "kpd", "rating", "1v1", "1v2", "1v3", "1v4", "1v5", "1vX"]
+    resultado = {campo: stats.get(campo) for campo in campos_directos}
+    resultado["rank"] = stats.get("best", {}).get("rank")
+    mapas = stats.get("maps", {})
+    top_mapas = sorted(mapas.items(), key=lambda item: item[1].get("played", 0), reverse=True)[:3]
+    resultado["top_maps"] = [nombre for nombre, _ in top_mapas]
+    resultado.update(calcular_metricas_avanzadas(stats))
+    return resultado
 
-    if seleccionado:
-        sid = next(sid for sid, nick in jugadores if nick == seleccionado)
-        st.session_state[f"{key_prefix}_nick"] = seleccionado
-        st.session_state[f"{key_prefix}_sid"] = sid
+# -------------------------------
+# INTERFAZ STREAMLIT
+# -------------------------------
 
-        if f"{key_prefix}_stats" not in st.session_state:
-            with st.spinner(f"Obteniendo estadísticas de {seleccionado}..."):
-                st.session_state[f"{key_prefix}_stats"] = obtener_stats(sid)
+st.title("CS2 Balanceador - Perfil de Jugador")
 
-        return seleccionado, sid
-    return None, None
+steam_id = st.text_input("Ingresa el SteamID64 del jugador:", "76561198108579338")
 
-# --- Selección de equipo
-def seleccionar_jugadores(prefix, jugadores_ocupados):
-    equipo = {}
-    for i in range(5):
-        disponibles = [nick for sid, nick in jugadores if sid not in jugadores_ocupados]
-        nick, sid = seleccionar_jugador(f"Jugador {i+1} ({prefix})", f"{prefix}_{i}", disponibles)
-        if nick and sid:
-            equipo[nick] = sid
-            jugadores_ocupados.add(sid)
-
-            # Mostrar stats en tiempo real
-            stats = st.session_state.get(f"{prefix}_{i}_stats")
-            if stats:
-                with st.expander(f"📊 Stats de {nick}"):
-                    st.write({
-                        "Rank": stats["rank"],
-                        "K/D": stats["kd"],
-                        "HLTV Rating": stats["hltv_rating"],
-                        "Clutch Success": stats["clutch_success"],
-                        "Winrate": stats["winrate"],
-                        "HS%": stats["hs"],
-                        "ADR": stats["adr"],
-                        "Entry Success": stats["entry_success"]
-                    })
-    return equipo
-
-# --- Control de duplicados
-jugadores_ocupados = set()
-
-# --- Interfaz de columnas para equipos
-col1, col2 = st.columns(2)
-
-with col1:
-    st.subheader("🔵 Equipo A")
-    equipo_a = seleccionar_jugadores("A", jugadores_ocupados)
-
-with col2:
-    st.subheader("🔴 Equipo B")
-    equipo_b = seleccionar_jugadores("B", jugadores_ocupados)
-
-# --- Confirmación final
-st.divider()
-
-if st.button("Confirmar equipos"):
-    if len(equipo_a) == 5 and len(equipo_b) == 5:
-        st.success("✅ Equipos seleccionados correctamente")
-        st.write("🔵 Equipo A:", equipo_a)
-        st.write("🔴 Equipo B:", equipo_b)
-        # Aquí se puede aplicar cálculo de habilidad y balance
-    else:
-        st.warning("⚠️ Debes seleccionar 5 jugadores por equipo.")
+if steam_id:
+    with st.spinner("Obteniendo estadísticas..."):
+        stats = obtener_stats_desde_json(steam_id)
+        if stats:
+            perfil = filtrar_stats_completo(stats)
+            st.subheader("📊 Perfil del Jugador")
+            st.json(perfil)
+        else:
+            st.error("No se pudieron obtener las estadísticas.")
